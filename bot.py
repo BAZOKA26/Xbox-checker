@@ -9,6 +9,7 @@ import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import requests
 import urllib3
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 urllib3.disable_warnings()
 
@@ -21,6 +22,22 @@ _TIMEOUT = (8, 10)
 busy_users = set()
 active_scans = {}
 user_settings = {}
+
+# --- سيرفر الويب لفتح المنفذ لمنصة Render ---
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running successfully!")
+
+def run_web_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(('0.0.0.0', port), SimpleHandler)
+    server.serve_forever()
+
+# تشغيل السيرفر في الخلفية بالتزامن مع البوت
+threading.Thread(target=run_web_server, daemon=True).start()
+# ---------------------------------------------
 
 # قاموس الترجمات الشامل (لكل النصوص والأزرار)
 TRANSLATIONS = {
@@ -408,7 +425,6 @@ def callback_handler(call):
         config["lang"] = selected_lang
         bot.answer_callback_query(call.id, TRANSLATIONS[selected_lang]["changed_lang"])
         
-        # إعادة تحميل قائمة الإعدادات باللغة الجديدة فوراً
         new_t = TRANSLATIONS[selected_lang]
         link_status = "ON ✅" if config["link_mode"] else "OFF ❌"
         channel_status = "ON ✅" if config["channel_send"] else "OFF ❌"
