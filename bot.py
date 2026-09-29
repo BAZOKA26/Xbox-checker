@@ -21,6 +21,7 @@ _TIMEOUT = (10, 15)
 busy_users = set()
 active_scans = {}
 user_settings = {}
+user_states = {}  # لتتبع حالات إدخال المستخدم (مثل تغيير الثريدز)
 file_lock = threading.Lock()
 
 # --- سيرفر الويب لفتح المنفذ لمنصة Render ---
@@ -241,6 +242,7 @@ def send_main_menu(chat_id, message_id=None):
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
+    user_states.pop(message.chat.id, None)
     send_main_menu(message.chat.id)
 
 
@@ -264,6 +266,29 @@ def stop_checker(message):
         bot.reply_to(message, "⚠️ لا توجد عملية فحص جارية حالياً.")
 
 
+# --- معالج النصوص لاستقبال المدخلات (مثل عدد الثريدز) ---
+@bot.message_handler(func=lambda message: True, content_types=['text'])
+def handle_text_messages(message):
+    chat_id = message.chat.id
+    text = message.text.strip()
+    
+    # التحقق مما إذا كان المستخدم في حالة انتظار إدخال عدد الثريدز
+    if user_states.get(chat_id) == "waiting_threads":
+        try:
+            val = int(text)
+            config = get_user_config(chat_id)
+            if 1 <= val <= config["max_threads"]:
+                config["threads"] = val
+                user_states.pop(chat_id, None)
+                bot.reply_to(message, f"✅ تم تحديث عدد الثريدز بنجاح إلى: `{val}`", parse_mode="Markdown")
+                send_main_menu(chat_id)
+            else:
+                bot.reply_to(message, f"⚠️ الرقم غير مسموح. أرسل رقماً بين 1 و {config['max_threads']}.")
+        except ValueError:
+            bot.reply_to(message, "⚠️ يرجى إرسال رقم صحيح فقط.")
+        return
+
+
 # --- معالج الأزرار التفاعلية (Callback Query Handler) ---
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callbacks(call):
@@ -274,31 +299,37 @@ def handle_callbacks(call):
     t = TRANSLATIONS[lang]
 
     if call.data == "stats":
+        user_states.pop(chat_id, None)
         markup = InlineKeyboardMarkup()
         markup.add(InlineKeyboardButton(t["btn_back"], callback_data="main_menu"))
         bot.edit_message_text(t["stats"], chat_id=chat_id, message_id=message_id, reply_markup=markup)
         
     elif call.data == "referrals":
+        user_states.pop(chat_id, None)
         markup = InlineKeyboardMarkup()
         markup.add(InlineKeyboardButton(t["btn_back"], callback_data="main_menu"))
         bot.edit_message_text(t["referrals_msg"], chat_id=chat_id, message_id=message_id, reply_markup=markup)
 
     elif call.data == "rewards":
+        user_states.pop(chat_id, None)
         markup = InlineKeyboardMarkup()
         markup.add(InlineKeyboardButton(t["btn_back"], callback_data="main_menu"))
         bot.edit_message_text(t["rewards_msg"], chat_id=chat_id, message_id=message_id, reply_markup=markup)
 
     elif call.data == "membership":
+        user_states.pop(chat_id, None)
         markup = InlineKeyboardMarkup()
         markup.add(InlineKeyboardButton(t["btn_back"], callback_data="main_menu"))
         bot.edit_message_text(t["membership_msg"].format(plan=config["plan"]), chat_id=chat_id, message_id=message_id, reply_markup=markup)
 
     elif call.data == "support":
+        user_states.pop(chat_id, None)
         markup = InlineKeyboardMarkup()
         markup.add(InlineKeyboardButton(t["btn_back"], callback_data="main_menu"))
         bot.edit_message_text(t["support_msg"], chat_id=chat_id, message_id=message_id, reply_markup=markup)
 
     elif call.data == "settings":
+        user_states.pop(chat_id, None)
         markup = InlineKeyboardMarkup(row_width=1)
         markup.add(
             InlineKeyboardButton(t["btn_set_threads"], callback_data="set_threads"),
@@ -307,11 +338,16 @@ def handle_callbacks(call):
         bot.edit_message_text(t["settings_title"], chat_id=chat_id, message_id=message_id, reply_markup=markup)
 
     elif call.data == "set_threads":
+        user_states[chat_id] = "waiting_threads"
         markup = InlineKeyboardMarkup()
         markup.add(InlineKeyboardButton(t["btn_back"], callback_data="settings"))
-        bot.edit_message_text("🧵 الحد الأقصى للثريدز مفعل على 125 (خطة VIP).", chat_id=chat_id, message_id=message_id, reply_markup=markup)
+        bot.edit_message_text(
+            f"🧵 **تعيين عدد الثريدز**\n\nالحد الأقصى الحالي: `{config['max_threads']}`\n\nأرسل الآن في الشات الرقم الذي تريده (مثلاً: `50` أو `125`):",
+            chat_id=chat_id, message_id=message_id, reply_markup=markup, parse_mode="Markdown"
+        )
 
     elif call.data == "main_menu":
+        user_states.pop(chat_id, None)
         send_main_menu(chat_id, message_id)
 
     elif call.data == "stop_scan":
@@ -330,6 +366,7 @@ def handle_callbacks(call):
 @bot.message_handler(content_types=['document'])
 def handle_file(message):
     chat_id = message.chat.id
+    user_states.pop(chat_id, None)
     
     with file_lock:
         if chat_id in busy_users:
