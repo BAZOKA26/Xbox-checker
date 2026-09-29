@@ -14,7 +14,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 urllib3.disable_warnings()
 
 # التوكن الخاص بك
-BOT_TOKEN = "8920692173:AAET9TgNCP8ArLi4TIR9zL3mH-KOfM7mKaU"
+BOT_TOKEN = "8920692173:AAFQPb5rqonlngMmha9EEN7QktgDazml78Y"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 _TIMEOUT = (8, 10)
