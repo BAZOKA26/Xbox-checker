@@ -21,7 +21,7 @@ _TIMEOUT = (10, 15)
 busy_users = set()
 active_scans = {}
 user_settings = {}
-user_states = {}  # لتتبع حالات إدخال المستخدم (مثل تغيير الثريدز)
+user_states = {}
 file_lock = threading.Lock()
 
 # --- سيرفر الويب لفتح المنفذ لمنصة Render ---
@@ -56,11 +56,7 @@ TRANSLATIONS = {
         "btn_support": "📞 الدعم",
         "btn_settings": "⚙️ الإعدادات",
         
-        "btn_change_lang": "🌐 تغيير اللغة (EN/TR/AR)",
-        "btn_change_name": "🏷️ تغيير اسم البوت",
-        "btn_api_mode": "📡 وضع الـ API",
         "btn_set_threads": "🧵 تعيين الثريدز",
-        "btn_change_plan": "💎 تغيير الخطة",
         "btn_main_menu": "🔙 القائمة الرئيسية",
         "btn_back": "🔙 رجوع"
     }
@@ -75,8 +71,6 @@ def get_user_config(chat_id):
             "mode": "Xbox",
             "plan": "💎 VIP (Unlimited)",
             "lang": "ar",
-            "link_mode": False,
-            "channel_send": False,
         }
     return user_settings[chat_id]
 
@@ -204,8 +198,8 @@ class XboxChecker:
             data = {"gamertag": gamertag, "gamerscore": gamerscore}
             return {"status": "FREE", "data": data}
 
-        except Exception as e:
-            return {"status": "BAD"}
+        except Exception:
+            return {"status": "ERROR"}
 
 
 def send_main_menu(chat_id, message_id=None):
@@ -246,16 +240,6 @@ def send_welcome(message):
     send_main_menu(message.chat.id)
 
 
-@bot.message_handler(commands=['queue'])
-def check_queue(message):
-    chat_id = message.chat.id
-    if chat_id in active_scans:
-        scan = active_scans[chat_id]
-        bot.reply_to(message, f"📊 حالة الفحص: {scan['checked']} / {scan['total']}")
-    else:
-        bot.reply_to(message, "⚠️ لا توجد عملية فحص جارية حالياً.")
-
-
 @bot.message_handler(commands=['stop'])
 def stop_checker(message):
     chat_id = message.chat.id
@@ -266,13 +250,11 @@ def stop_checker(message):
         bot.reply_to(message, "⚠️ لا توجد عملية فحص جارية حالياً.")
 
 
-# --- معالج النصوص لاستقبال المدخلات (مثل عدد الثريدز) ---
 @bot.message_handler(func=lambda message: True, content_types=['text'])
 def handle_text_messages(message):
     chat_id = message.chat.id
     text = message.text.strip()
     
-    # التحقق مما إذا كان المستخدم في حالة انتظار إدخال عدد الثريدز
     if user_states.get(chat_id) == "waiting_threads":
         try:
             val = int(text)
@@ -289,7 +271,6 @@ def handle_text_messages(message):
         return
 
 
-# --- معالج الأزرار التفاعلية (Callback Query Handler) ---
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callbacks(call):
     chat_id = call.message.chat.id
@@ -451,7 +432,8 @@ def handle_file(message):
                 else:
                     active_scans[chat_id]["error"] += 1
 
-                if checked % 10 == 0 or checked == total:
+                # تحديث العداد كل 5 أسطر أو عند الوصول للنهاية
+                if checked % 5 == 0 or checked == total:
                     try:
                         scan_d = active_scans[chat_id]
                         bot.edit_message_text(
@@ -500,9 +482,6 @@ def handle_file(message):
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"⏰ Elapsed: `{elapsed_time} sec`\n"
             f"⚡ CPM: `{cpm}`\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"☰ — Controls:\n"
-            f"︙ /stop - Stop and send results\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         )
         
@@ -519,5 +498,5 @@ def handle_file(message):
 
 
 if __name__ == "__main__":
-    print("Bot is running with full interactive features...")
+    print("Bot is running smoothly...")
     bot.infinity_polling()
