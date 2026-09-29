@@ -14,7 +14,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 urllib3.disable_warnings()
 
 # التوكن الخاص بك
-BOT_TOKEN = "8920692173:AAFQPb5rqonlngMmha9EEN7QktgDazml78Y"
+BOT_TOKEN = "8920692173:AAET9TgNCP8ArLi4TIR9zL3mH-KOfM7mKaU"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 _TIMEOUT = (8, 10)
@@ -22,6 +22,7 @@ _TIMEOUT = (8, 10)
 busy_users = set()
 active_scans = {}
 user_settings = {}
+file_lock = threading.Lock()  # <--- تعريف قفل الملفات لمنع التكرار
 
 # --- سيرفر الويب لفتح المنفذ لمنصة Render ---
 class SimpleHandler(BaseHTTPRequestHandler):
@@ -49,7 +50,6 @@ TRANSLATIONS = {
         "membership_msg": "💎 خطتك الحالية هي: {plan}",
         "changed_lang": "✅ تم تغيير اللغة إلى: العربية",
         
-        # أزرار القائمة الرئيسية
         "btn_stats": "📊 الإحصائيات",
         "btn_referrals": "🔗 الإحالات",
         "btn_rewards": "🎁 المكافآت",
@@ -57,7 +57,6 @@ TRANSLATIONS = {
         "btn_support": "📞 الدعم",
         "btn_settings": "⚙️ الإعدادات",
         
-        # أزرار الإعدادات
         "btn_change_lang": "🌐 تغيير اللغة (EN/TR/AR)",
         "btn_change_name": "🏷️ تغيير اسم البوت",
         "btn_api_mode": "📡 وضع الـ API",
@@ -74,7 +73,6 @@ TRANSLATIONS = {
         "membership_msg": "💎 Your current plan is: {plan}",
         "changed_lang": "✅ Language changed to: English",
         
-        # أزرار القائمة الرئيسية
         "btn_stats": "📊 Stats",
         "btn_referrals": "🔗 Referrals",
         "btn_rewards": "🎁 Rewards",
@@ -82,7 +80,6 @@ TRANSLATIONS = {
         "btn_support": "📞 Support",
         "btn_settings": "⚙️ Settings",
         
-        # أزرار الإعدادات
         "btn_change_lang": "🌐 Change Language (EN/TR/AR)",
         "btn_change_name": "🏷️ Change Bot Name",
         "btn_api_mode": "📡 API Mode",
@@ -99,7 +96,6 @@ TRANSLATIONS = {
         "membership_msg": "💎 Mevcut planınız: {plan}",
         "changed_lang": "✅ Dil Türkçe olarak değiştirildi",
         
-        # أزرار القائمة الرئيسية
         "btn_stats": "📊 İstatistikler",
         "btn_referrals": "🔗 Referanslar",
         "btn_rewards": "🎁 Ödüller",
@@ -107,7 +103,6 @@ TRANSLATIONS = {
         "btn_support": "📞 Destek",
         "btn_settings": "⚙️ Ayarlar",
         
-        # أزرار الإعدادات
         "btn_change_lang": "🌐 Dil Değiştir (EN/TR/AR)",
         "btn_change_name": "🏷️ Bot Adını Değiştir",
         "btn_api_mode": "📡 API Modu",
@@ -541,11 +536,14 @@ def check_queue(message):
 @bot.message_handler(content_types=['document'])
 def handle_file(message):
     chat_id = message.chat.id
-    config = get_user_config(chat_id)
     
-    if chat_id in busy_users:
-        bot.reply_to(message, "⚠️ لديك ملف قيد الفحص بالفعل.")
-        return
+    # القفل الفوري لمنع تكرار الطلبات المزدوجة من تيليجرام
+    with file_lock:
+        if chat_id in busy_users:
+            return
+        busy_users.add(chat_id)
+
+    config = get_user_config(chat_id)
 
     try:
         file_name = message.document.file_name if message.document.file_name else "Combo.txt"
@@ -561,9 +559,9 @@ def handle_file(message):
 
         if not combos:
             bot.reply_to(message, "الملف فارغ أو التنسيق غير صحيح.")
+            busy_users.discard(chat_id)
             return
 
-        busy_users.add(chat_id)
         active_scans[chat_id] = {
             "checked": 0, "total": len(combos), "hits": 0,
             "free": 0, "two_fa": 0, "bad": 0, "error": 0, "stop": False
