@@ -41,11 +41,12 @@ threading.Thread(target=run_web_server, daemon=True).start()
 TRANSLATIONS = {
     "ar": {
         "welcome": "# WELCOME TO {bot_name} #\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n– 📬 أرسل ملف الكومبو الخاص بك (.txt)\n︙ التنسيق: mail:pass (سطر لكل حساب)\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n– 📊 لوحة التحكم الخاصة بك:\n︙ الثريدز: {threads} / {max_threads}\n︙ الخطة: {plan}\n︙ الأيام المتبقية: ∞ (مدى الحياة)\n︙ الحد اليومي: غير محدود (Unlimited)\n︙ الوضع: 🎮 {mode}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n– ◎ اختر خياراً من القائمة أدناه:",
-        "settings_title": "⚙️ **إعدادات البوت**",
-        "threads_title": "# 🧵 تعيين عدد الثريدز #\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nالحدود حسب خطتك:\n- مميز (VIP): 1-125\n\nخطتك الحالية ({plan}) تتيح لك حتى {max_threads} ثريد.\nأرسل رقماً بين 1 و {max_threads}.",
-        "stats": "📊 إحصائياتك: لا توجد عمليات فحص سابقة مسجلة.",
-        "membership_msg": "💎 خطتك الحالية هي: {plan} (غير محدودة)",
-        "changed_lang": "✅ تم تغيير اللغة إلى: العربية",
+        "settings_title": "⚙️ **إعدادات البوت**\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\nاختر الإعداد الذي تريد تعديله:",
+        "stats": "📊 **إحصائياتك:**\n- إجمالي العمليات: غير محدود\n- الحالة: نشط وجاهز للفحص",
+        "membership_msg": "💎 **معلومات العضوية:**\n- الخطة الحالية: {plan}\n- الصلاحية: مدى الحياة (Unlimited)",
+        "support_msg": "📞 **الدعم الفني:**\nلأي مساعدة، تواصل مع المسؤول عبر الأزرار أو القناة.",
+        "referrals_msg": "🔗 **نظام الإحالات:**\nقم بمشاركة بوتك مع أصدقائك.",
+        "rewards_msg": "🎁 **المكافآت:**\nلا توجد مكافآت معلقة حالياً.",
         
         "btn_stats": "📊 الإحصائيات",
         "btn_referrals": "🔗 الإحالات",
@@ -263,6 +264,69 @@ def stop_checker(message):
         bot.reply_to(message, "⚠️ لا توجد عملية فحص جارية حالياً.")
 
 
+# --- معالج الأزرار التفاعلية (Callback Query Handler) ---
+@bot.callback_query_handler(func=lambda call: True)
+def handle_callbacks(call):
+    chat_id = call.message.chat.id
+    message_id = call.message.message_id
+    config = get_user_config(chat_id)
+    lang = config["lang"]
+    t = TRANSLATIONS[lang]
+
+    if call.data == "stats":
+        markup = InlineKeyboardMarkup()
+        markup.add(InlineKeyboardButton(t["btn_back"], callback_data="main_menu"))
+        bot.edit_message_text(t["stats"], chat_id=chat_id, message_id=message_id, reply_markup=markup)
+        
+    elif call.data == "referrals":
+        markup = InlineKeyboardMarkup()
+        markup.add(InlineKeyboardButton(t["btn_back"], callback_data="main_menu"))
+        bot.edit_message_text(t["referrals_msg"], chat_id=chat_id, message_id=message_id, reply_markup=markup)
+
+    elif call.data == "rewards":
+        markup = InlineKeyboardMarkup()
+        markup.add(InlineKeyboardButton(t["btn_back"], callback_data="main_menu"))
+        bot.edit_message_text(t["rewards_msg"], chat_id=chat_id, message_id=message_id, reply_markup=markup)
+
+    elif call.data == "membership":
+        markup = InlineKeyboardMarkup()
+        markup.add(InlineKeyboardButton(t["btn_back"], callback_data="main_menu"))
+        bot.edit_message_text(t["membership_msg"].format(plan=config["plan"]), chat_id=chat_id, message_id=message_id, reply_markup=markup)
+
+    elif call.data == "support":
+        markup = InlineKeyboardMarkup()
+        markup.add(InlineKeyboardButton(t["btn_back"], callback_data="main_menu"))
+        bot.edit_message_text(t["support_msg"], chat_id=chat_id, message_id=message_id, reply_markup=markup)
+
+    elif call.data == "settings":
+        markup = InlineKeyboardMarkup(row_width=1)
+        markup.add(
+            InlineKeyboardButton(t["btn_set_threads"], callback_data="set_threads"),
+            InlineKeyboardButton(t["btn_back"], callback_data="main_menu")
+        )
+        bot.edit_message_text(t["settings_title"], chat_id=chat_id, message_id=message_id, reply_markup=markup)
+
+    elif call.data == "set_threads":
+        markup = InlineKeyboardMarkup()
+        markup.add(InlineKeyboardButton(t["btn_back"], callback_data="settings"))
+        bot.edit_message_text("🧵 الحد الأقصى للثريدز مفعل على 125 (خطة VIP).", chat_id=chat_id, message_id=message_id, reply_markup=markup)
+
+    elif call.data == "main_menu":
+        send_main_menu(chat_id, message_id)
+
+    elif call.data == "stop_scan":
+        if chat_id in active_scans:
+            active_scans[chat_id]["stop"] = True
+            bot.answer_callback_query(call.id, "🛑 تم إيقاف الفحص.")
+        else:
+            bot.answer_callback_query(call.id, "⚠️ لا يوجد فحص نشط حالياً.")
+
+    try:
+        bot.answer_callback_query(call.id)
+    except:
+        pass
+
+
 @bot.message_handler(content_types=['document'])
 def handle_file(message):
     chat_id = message.chat.id
@@ -417,16 +481,6 @@ def handle_file(message):
         active_scans.pop(chat_id, None)
 
 
-@bot.callback_query_handler(func=lambda call: call.data == "stop_scan")
-def stop_scan_callback(call):
-    chat_id = call.message.chat.id
-    if chat_id in active_scans:
-        active_scans[chat_id]["stop"] = True
-        bot.answer_callback_query(call.id, "🛑 تم إيقاف الفحص.")
-    else:
-        bot.answer_callback_query(call.id, "⚠️ لا يوجد فحص نشط حالياً.")
-
-
 if __name__ == "__main__":
-    print("Bot is running with full VIP & Unlimited features...")
+    print("Bot is running with full interactive features...")
     bot.infinity_polling()
